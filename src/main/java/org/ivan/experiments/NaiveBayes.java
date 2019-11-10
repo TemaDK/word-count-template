@@ -25,8 +25,9 @@ import java.util.*;
 public class NaiveBayes {
     private static final String MAILS = "Mails";
     private static final String ATTRIBUTES = "Attributes";
-    private static final int targetValue = 4;
+    private static final int targetValue = 18;
 
+    private static int linesLimit = 8000000;
     private static FilesInformationService filesInformationService = new FilesInformationService();
 
     public static void main(String[] args) throws Exception {
@@ -57,6 +58,9 @@ public class NaiveBayes {
                 File dir = new File("data");
                 File[] files = dir.listFiles();
 
+                //ограничение на кол-во векторов
+                boolean limit = false;
+                int i = 0;
                 //итерация для файла
                 for (File f : files) {
 
@@ -65,11 +69,10 @@ public class NaiveBayes {
                     CSVParser parser = null;
                     try {
                         //создание парсера для файла
-                        parser = new CSVParser(new FileReader(f), CSVFormat.newFormat(','));
+                        parser = new CSVParser(new FileReader(f), CSVFormat.newFormat('|'));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-                    int i = 0;
 
                     //создание итератора по файлу
                     Iterator<CSVRecord> iterator = parser.iterator();
@@ -78,6 +81,7 @@ public class NaiveBayes {
                     while (iterator.hasNext()) {
                         String data = "";
                         CSVRecord next = iterator.next();
+                        if(next.size() < filesInformationService.getAttributes().size()) continue;
                         for(int j = 0; j < filesInformationService.getAttributes().size(); ++j){
                             if (data != "")
                                 data += ",";
@@ -85,13 +89,28 @@ public class NaiveBayes {
                         }
                         //Рассылка данных
                         dataStreamer.addData(i++, data);
-                        String tok[] = data.split(",");
-                        System.out.println("Data: " + data + " Length: " + tok.length);
+                        //String tok[] = data.split(",");
+                        //System.out.println("Data: " + data + " Length: " + tok.length);
+                        //if (i % 10000 == 0) System.out.println(i);
+                        if (i % 1000 == 0) updateProgress((float)i/(float)linesLimit);
+                        if (i > linesLimit)
+                        {
+                            limit = true;
+                            break;
+                        }
                     }
+                    if (i % 1000 == 0) updateProgress((float)i/(float)linesLimit);
+                    if(limit){
+                        System.out.println("File " + f.getName() + " parsed");
+                        System.out.println("Number of entries: " + i);
+                        System.out.println("Spent time: " + ((System.currentTimeMillis() - fileStart) / 1000 + "s"));
+                        break;
 
+                    }
                     System.out.println("File " + f.getName() + " parsed");
                     System.out.println("Number of entries: " + i);
                     System.out.println("Spent time: " + ((System.currentTimeMillis() - fileStart) / 1000 + "s"));
+
                 }
             }
 
@@ -121,11 +140,10 @@ public class NaiveBayes {
 
                         String data = entry.getValue();
                         String[] tokens = data.split(",");
+                        if (tokens.length < attributes.size()) continue;
                         String age = tokens[targetValue];
-
                         List<String> features = new ArrayList<>();
                         //получение данных по атрибутам
-                        if (tokens.length < attributes.size()) continue;
                         for (Attribute a : attributes) {
                             String feature = a.getFieldName() + tokens[(int) a.getOrder() - 1];
                             //System.out.println(feature);
@@ -140,8 +158,7 @@ public class NaiveBayes {
                     return localClassifier;
                 }
             };
-            System.out.println("All nodes full parsing time:");
-            System.out.println((System.currentTimeMillis() - parseStart) / 1000 + "s");
+            System.out.println("All nodes full parsing time:" + (System.currentTimeMillis() - parseStart) / 1000 + "s");
 
             System.out.println("Training...");
             long startT = System.currentTimeMillis();
@@ -152,13 +169,21 @@ public class NaiveBayes {
             for(NaiveBayesClassifier<String, String> stringNaiveBayesClassifierEntry : pieces){
                 main.merge(stringNaiveBayesClassifierEntry);
             }
-            System.out.println("Training time:");
-            System.out.println((System.currentTimeMillis() - startT) / 1000 + "s");
             System.out.println("Reduce " + pieces.size() + " pieces");
-
-
-
+            System.out.println("Full training time:" + (System.currentTimeMillis() - startT) / 1000 + "s");
         }
     }
+    static void updateProgress(double progressPercentage) {
+        final int width = 50;
 
+        System.out.print("\r[");
+        int i = 0;
+        for (; i <= (int)(progressPercentage*width); i++) {
+            System.out.print(".");
+        }
+        for (; i < width; i++) {
+            System.out.print(" ");
+        }
+        System.out.print("]");
+    }
 }
