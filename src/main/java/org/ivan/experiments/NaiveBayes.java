@@ -25,9 +25,9 @@ import java.util.*;
 public class NaiveBayes {
     private static final String MAILS = "Mails";
     private static final String ATTRIBUTES = "Attributes";
-    private static final int targetValue = 18;
+    private static final int targetValue = 4;
 
-    private static int linesLimit = 8000000;
+    private static int linesLimit = 500000;
     private static FilesInformationService filesInformationService = new FilesInformationService();
 
     public static void main(String[] args) throws Exception {
@@ -69,7 +69,7 @@ public class NaiveBayes {
                     CSVParser parser = null;
                     try {
                         //создание парсера для файла
-                        parser = new CSVParser(new FileReader(f), CSVFormat.newFormat('|'));
+                        parser = new CSVParser(new FileReader(f), CSVFormat.newFormat(','));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -82,10 +82,11 @@ public class NaiveBayes {
                         String data = "";
                         CSVRecord next = iterator.next();
                         if(next.size() < filesInformationService.getAttributes().size()) continue;
-                        for(int j = 0; j < filesInformationService.getAttributes().size(); ++j){
+                        for(Attribute a : filesInformationService.getAttributes())
+                        {
                             if (data != "")
                                 data += ",";
-                            data += next.get(j);
+                            data += next.get((int)a.getOrder() - 1);
                         }
                         //Рассылка данных
                         dataStreamer.addData(i++, data);
@@ -141,12 +142,13 @@ public class NaiveBayes {
                         String data = entry.getValue();
                         String[] tokens = data.split(",");
                         if (tokens.length < attributes.size()) continue;
-                        String age = tokens[targetValue];
+                        String age = tokens[targetValue - 1];
                         List<String> features = new ArrayList<>();
                         //получение данных по атрибутам
+                        int j = 0;
                         for (Attribute a : attributes) {
-                            String feature = a.getFieldName() + tokens[(int) a.getOrder() - 1];
-                            //System.out.println(feature);
+                            String feature = a.getFieldName() + tokens[j++];
+                            //System.out.println(feature + age);
                             features.add(feature);
                         }
                         //обучение локального классификатора
