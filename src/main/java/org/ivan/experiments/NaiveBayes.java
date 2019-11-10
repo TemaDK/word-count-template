@@ -24,22 +24,35 @@ import java.util.*;
 
 public class NaiveBayes {
     private static final String MAILS = "Mails";
-    private static final String CLASSIFIER = "Mails";
+    private static final String ATTRIBUTES = "Attributes";
     private static final int targetValue = 4;
 
     private static FilesInformationService filesInformationService = new FilesInformationService();
 
     public static void main(String[] args) throws Exception {
+
         try (Ignite client = IgniteStarter.startClient()) {
-            IgniteCache<Integer, CSVRecord> cache = client.getOrCreateCache(new CacheConfiguration<>(MAILS));
-            //final IgniteCache<String, NaiveBayesClassifier<String, String>> classifiers = client.getOrCreateCache(new CacheConfiguration<>(CLASSIFIER)); //получение ссылки на кэш
+
+            IgniteCache<Integer, String> cache = client.getOrCreateCache(new CacheConfiguration<>(MAILS));
+            IgniteCache<Integer, String> cache2 = client.getOrCreateCache(new CacheConfiguration<>(ATTRIBUTES));
+
             cache.removeAll();
+            cache2.removeAll();
 
             long parseStart = System.currentTimeMillis();
             System.out.println("Broadcasting...");
 
+            //Load attributes
+            try (IgniteDataStreamer<Integer, String> dataStreamer2 = client.dataStreamer(ATTRIBUTES)) {
+                int i = 0;
+                for (Attribute a : filesInformationService.getAttributes()) {
+                    String data = a.getOrder()+","+a.getFieldName()+","+a.getDescription();
+                    dataStreamer2.addData(i++, data);
+                }
+            }
+
             // Load data
-            try (IgniteDataStreamer<Integer, CSVRecord> dataStreamer = client.dataStreamer(MAILS)) {
+            try (IgniteDataStreamer<Integer, String> dataStreamer = client.dataStreamer(MAILS)) {
                 //поиск файлов с данным
                 File dir = new File("data");
                 File[] files = dir.listFiles();
@@ -63,9 +76,17 @@ public class NaiveBayes {
                     iterator.next();
                     //итерация по файлу
                     while (iterator.hasNext()) {
+                        String data = "";
                         CSVRecord next = iterator.next();
+                        for(int j = 0; j < filesInformationService.getAttributes().size(); ++j){
+                            if (data != "")
+                                data += ",";
+                            data += next.get(j);
+                        }
                         //Рассылка данных
-                        dataStreamer.addData(i++, next);
+                        dataStreamer.addData(i++, data);
+                        String tok[] = data.split(",");
+                        System.out.println("Data: " + data + " Length: " + tok.length);
                     }
 
                     System.out.println("File " + f.getName() + " parsed");
@@ -78,27 +99,35 @@ public class NaiveBayes {
                 @IgniteInstanceResource
                 private Ignite localIgnite;
                 //private String key = localIgnite.name() + new Date().toString();
-
+                private List<Attribute> attributes = new ArrayList<Attribute>();
                 @Override
                 public NaiveBayesClassifier<String, String> call() throws Exception {
                     System.out.println("Begin to parsing and train local");
                     long localTrainStart = System.currentTimeMillis();
 
-                    IgniteCache<Integer, CSVRecord> cache = localIgnite.cache(MAILS);
+                    IgniteCache<Integer, String> cache = localIgnite.cache(MAILS);
+
+                    IgniteCache<Integer, String> cache2 = client.cache(ATTRIBUTES);
+                    int i = 0;
+                    while(cache2.get(i) != null){
+                        String[] tokens = cache2.get(i).split(",");
+                        attributes.add(new Attribute(Long.parseLong(tokens[0]),tokens[1],tokens[2]));
+                        ++i;
+                    }
 
                     NaiveBayesClassifier<String, String> localClassifier = new NaiveBayesClassifier<>();
 
-                    for (Cache.Entry<Integer, CSVRecord> entry : cache.localEntries()) {
-                        CSVRecord next = entry.getValue();
-                        String age = next.get(targetValue);
+                    for (Cache.Entry<Integer, String> entry : cache.localEntries()) {
+
+                        String data = entry.getValue();
+                        String[] tokens = data.split(",");
+                        String age = tokens[targetValue];
 
                         List<String> features = new ArrayList<>();
                         //получение данных по атрибутам
-                        if (next.size() < filesInformationService.getAttributes().size()) continue;
-                        for (Attribute a : filesInformationService.getAttributes()) {
-                            String feature = a.getFieldName() + next.get((int) a.getOrder() - 1);
-                            //String feature = next.get((int) a.getFileOrder() - 1);
-                            //String feature = a.getFieldName();
+                        if (tokens.length < attributes.size()) continue;
+                        for (Attribute a : attributes) {
+                            String feature = a.getFieldName() + tokens[(int) a.getOrder() - 1];
                             //System.out.println(feature);
                             features.add(feature);
                         }
@@ -123,7 +152,7 @@ public class NaiveBayes {
             for(NaiveBayesClassifier<String, String> stringNaiveBayesClassifierEntry : pieces){
                 main.merge(stringNaiveBayesClassifierEntry);
             }
-            System.out.println("Training time");
+            System.out.println("Training time:");
             System.out.println((System.currentTimeMillis() - startT) / 1000 + "s");
             System.out.println("Reduce " + pieces.size() + " pieces");
 
