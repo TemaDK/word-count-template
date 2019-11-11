@@ -1,4 +1,4 @@
-package org.ivan.experiments.ml;
+package org.temadk.experiments.ml;
 
 import java.io.Serializable;
 import java.util.Collection;

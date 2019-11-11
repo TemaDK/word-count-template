@@ -1,4 +1,4 @@
-package org.ivan.experiments.entities;
+package org.temadk.experiments.entities;
 
 public class Attribute {
     //порядок атрибута в файле

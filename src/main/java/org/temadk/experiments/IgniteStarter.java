@@ -1,4 +1,4 @@
-package org.ivan.experiments;
+package org.temadk.experiments;
 
 import org.apache.ignite.Ignite;
 import org.apache.ignite.Ignition;
@@ -27,6 +27,6 @@ public class IgniteStarter {
                 .setPeerClassLoadingEnabled(true)
                 .setDiscoverySpi(new TcpDiscoverySpi()
                         .setIpFinder(new TcpDiscoveryVmIpFinder()
-                                .setAddresses(Collections.singleton("localhost:47500..47509")))));
+                                .setAddresses(Collections.singleton("10.146.3.51:47500..47509")))));
     }
 }
