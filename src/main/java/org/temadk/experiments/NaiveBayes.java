@@ -159,7 +159,7 @@ public class NaiveBayes {
                                 continue;
                             }
                             String feature = a.getFieldName() + tokens[j++];
-                            //System.out.println(feature + age);
+                            //System.out.println(feature + category);
                             features.add(feature);
                         }
                         //обучение локального классификатора
