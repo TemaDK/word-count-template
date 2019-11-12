@@ -20,7 +20,7 @@ import java.io.IOException;
 import java.util.*;
 
 public class NaiveBayes {
-    private static final String MAILS = "Mails";
+    private static final String VECTORS = "Vectors";
     private static final String ATTRIBUTES = "Attributes";
 
     public static void main(String[] args) throws Exception {
@@ -36,7 +36,7 @@ public class NaiveBayes {
 
         try (Ignite client = IgniteStarter.startClient()) {
 
-            IgniteCache<Integer, String> cache = client.getOrCreateCache(new CacheConfiguration<>(MAILS));
+            IgniteCache<Integer, String> cache = client.getOrCreateCache(new CacheConfiguration<>(VECTORS));
             IgniteCache<Integer, String> cache2 = client.getOrCreateCache(new CacheConfiguration<>(ATTRIBUTES));
 
             cache.removeAll();
@@ -55,7 +55,7 @@ public class NaiveBayes {
             }
 
             // Load data
-            try (IgniteDataStreamer<Integer, String> dataStreamer = client.dataStreamer(MAILS)) {
+            try (IgniteDataStreamer<Integer, String> dataStreamer = client.dataStreamer(VECTORS)) {
                 //поиск файлов с данным
                 File dir = new File(pathToData);
                 File[] files = dir.listFiles();
@@ -127,7 +127,7 @@ public class NaiveBayes {
                     System.out.println("Begin to parsing and train local");
                     long localTrainStart = System.currentTimeMillis();
 
-                    IgniteCache<Integer, String> cache = localIgnite.cache(MAILS);
+                    IgniteCache<Integer, String> cache = localIgnite.cache(VECTORS);
                     long availableVectors = cache.localMetrics().getCacheSize();
 
                     IgniteCache<Integer, String> cache2 = client.cache(ATTRIBUTES);
@@ -149,17 +149,21 @@ public class NaiveBayes {
                             continue;
                         }
                         if (vectNum % 1000 == 0) updateProgress((float)vectNum/(float)availableVectors);
-                        String age = tokens[targetValue - 1];
+                        String category = tokens[targetValue - 1];
                         List<String> features = new ArrayList<>();
                         //получение данных по атрибутам
                         int j = 0;
                         for (Attribute a : attributes) {
+                            if(j == targetValue - 1) {
+                                j++;
+                                continue;
+                            }
                             String feature = a.getFieldName() + tokens[j++];
                             //System.out.println(feature + age);
                             features.add(feature);
                         }
                         //обучение локального классификатора
-                        localClassifier.learn(age, features);
+                        localClassifier.learn(category, features);
                     }
                     updateProgress(1);
                     System.out.println("Local training:" + (System.currentTimeMillis() - localTrainStart) / 1000 + "s");
